@@ -3,6 +3,7 @@
 Before running code for the first time:
 
 - $ python3.11 -m venv .
+- $ source bin/activate
 - $ pip install -r requirements.txt
 
 Before running code every session:
