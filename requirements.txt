@@ -1,2 +1,3 @@
 check50
+pygame
 style50
