@@ -100,7 +100,7 @@ class CrosswordCreator():
          constraints; in this case, the length of the word.)
         """
         for v, words in self.domains.items():
-            for word in words:
+            for word in words.copy():
                 if len(word) != v.length:
                     self.domains[v].remove(word)
 
@@ -120,7 +120,7 @@ class CrosswordCreator():
         # must be the same as the jth character of v2’s value.
         x_pos, y_pos = self.crossword.overlaps[x, y]
         found = False
-        for x_word in self.domains[x]:
+        for x_word in self.domains[x].copy():
             found = False
             for y_word in self.domains[y]:
                 if x_word[x_pos] == y_word[y_pos]:
@@ -151,11 +151,9 @@ class CrosswordCreator():
             if self.revise(x, y):
                 if not self.domains[x]:
                     return False
-                # We maybe don't need this?
-                else:
-                    for a, b in arcs:
-                        if a == x and b != y:
-                            arcs.append((b, a))
+                for z in self.crossword.neighbors(x):
+                    if z != y:
+                        arcs.append((z, x))
         return True
 
     def assignment_complete(self, assignment):
@@ -173,15 +171,18 @@ class CrosswordCreator():
         Return True if `assignment` is consistent (i.e., words fit in crossword
         puzzle without conflicting characters); return False otherwise.
         """
-        if not self.assignment_complete(assignment):
-            return False
         words = assignment.values()
         if len(words) != len(set(words)):
             return False
-        for v, word in assignment.values():
+        for v, word in assignment.items():
             if v.length != len(word):
                 return False
-        for (x, y), (x_pos, y_pos) in self.crossword.overlaps.items():
+        for (x, y), value in self.crossword.overlaps.items():
+            if value is None:
+                continue
+            if not assignment.get(x) or not assignment.get(y):
+                continue
+            x_pos, y_pos = value
             x_word = assignment[x]
             y_word = assignment[y]
             if x_word[x_pos] != y_word[y_pos]:
@@ -195,7 +196,24 @@ class CrosswordCreator():
         The first value in the list, for example, should be the one
         that rules out the fewest values among the neighbors of `var`.
         """
-        raise NotImplementedError
+        result = {}
+        for word in self.domains[var]:
+            for neighbor in self.crossword.neighbors(var):
+                v = self.crossword.overlaps[(var, neighbor)]
+                if v is None:
+                    continue
+                x_pos, y_pos = v
+                result[word] = result.get(word, 0) + self.word_eliminate(neighbor, word[x_pos], y_pos)
+        sorted_result = {k: v for k, v in sorted(result.items(), key=lambda item: item[1])}
+        words = list(sorted_result.keys())
+        return words
+
+    def word_eliminate(self, var, char, position):
+        eliminates = 0
+        for word in self.domains[var]:
+            if char != word[position]:
+                eliminates += 1
+        return eliminates
 
     def select_unassigned_variable(self, assignment):
         """
@@ -205,7 +223,11 @@ class CrosswordCreator():
         degree. If there is a tie, any of the tied variables are acceptable
         return values.
         """
-        raise NotImplementedError
+        vars = self.crossword.variables
+        assigned_variables = assignment.keys()
+        candidates = vars - assigned_variables
+        sorted_candidates = sorted(candidates, key=lambda x: len(self.domains[x]))
+        return sorted_candidates.pop(0)
 
     def backtrack(self, assignment):
         """
@@ -216,7 +238,19 @@ class CrosswordCreator():
 
         If no assignment is possible, return None.
         """
-        raise NotImplementedError
+
+        if self.assignment_complete (assignment):
+            return assignment
+        var = self.select_unassigned_variable(assignment)
+        for value in self.order_domain_values(var, assignment):
+            assignment[var] = value
+            if self.consistent(assignment):
+                result = self.backtrack(assignment)
+                if result:
+                    return result
+            del assignment[var]
+        return None
+
 
 
 def main():
